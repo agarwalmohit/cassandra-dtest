@@ -159,7 +159,7 @@ def counter_incrementer(tester, to_verify_queue, verification_done_queue, rewrit
 
             key = key or uuid.uuid4()
 
-            session.execute(prepared, (key))
+            session.execute(prepared, (key,))
 
             to_verify_queue.put_nowait((key, count + 1,))
         except Exception:
@@ -541,6 +541,7 @@ class UpgradeTester(Tester):
 
             if divmod(round(time.time()), 30)[1] == 0:
                 debug("{} queue size is at {}, target is to reach '{}' {}".format(label, qsize, opfunc.__name__, required_len))
+                time.sleep(1)  # no need for extra debug output for a while
 
             time.sleep(0.1)
             continue
@@ -590,7 +591,7 @@ class UpgradeTester(Tester):
         # queue of verified writes, which are update candidates
         verification_done_queue = Queue(maxsize=500)
 
-        incrementer = Process(target=data_writer, args=(self, to_verify_queue, verification_done_queue, 25))
+        incrementer = Process(target=counter_incrementer, args=(self, to_verify_queue, verification_done_queue, 25))
         # daemon subprocesses are killed automagically when the parent process exits
         incrementer.daemon = True
         self.subprocs.append(incrementer)
@@ -599,7 +600,7 @@ class UpgradeTester(Tester):
         if wait_for_rowcount > 0:
             self._wait_until_queue_condition('counters incremented (but not verified)', to_verify_queue, operator.ge, wait_for_rowcount, max_wait_s=max_wait_s)
 
-        count_verifier = Process(target=data_checker, args=(self, to_verify_queue, verification_done_queue))
+        count_verifier = Process(target=counter_incrementer, args=(self, to_verify_queue, verification_done_queue))
         # daemon subprocesses are killed automagically when the parent process exits
         count_verifier.daemon = True
         self.subprocs.append(count_verifier)
