@@ -305,6 +305,7 @@ class Tester(TestCase):
                 self.cluster.stop(gently=True)
 
             # Cleanup everything:
+            self.stop_active_log_watch()
             debug("removing ccm cluster " + self.cluster.name + " at: " + self.test_path)
             self.cluster.remove()
 
@@ -420,12 +421,29 @@ class Tester(TestCase):
         # log watching happens in another thread, but we want it to halt the main
         # thread's execution, which we have to do by registering a signal handler
         signal.signal(signal.SIGINT, self._catch_interrupt)
-        self.cluster.actively_watch_logs_for_error(self._log_error_handler, interval=0.25)
+        # actively_watch_logs_for_error returns an event that needs to be .set() on exit to allow the thread to stop
+        self._log_watch_thread = self.cluster.actively_watch_logs_for_error(self._log_error_handler, interval=0.25)
+
+    def stop_active_log_watch(self):
+        """
+        Joins the log watching thread, which will then exit.
+        Should be called after each test, ideally after nodes are stopped but before cluster files are removed.
+
+        Should not be called if begin_active_log_watch was never called to start log watching.
+        Can be called multiple times without error.
+        If not called, threads will remain running until the parent process exits.
+        """
+        try:
+            self._log_watch_thread.join()
+        except AttributeError:
+            # no thread apparently, so nothing to stop
+            # may happen when allow_log_errors is True, since in that case we don't init a logging thread
+            pass
 
     def _log_error_handler(self, errordata):
         """
         Callback handler used in conjunction with begin_active_log_watch.
-        When called prepares exception instance, then will indirectly
+        When called, prepares exception instance, then will indirectly
         cause _catch_interrupt to be called, which can raise the exception in the main
         program thread.
 
