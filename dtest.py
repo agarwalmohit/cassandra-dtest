@@ -290,6 +290,10 @@ class Tester(TestCase):
         self.var_debug(cluster)
         self.var_trace(cluster)
 
+    def _cleanup_last_test_dir(self):
+        if os.path.exists(LAST_TEST_DIR):
+            os.remove(LAST_TEST_DIR)
+
     def _cleanup_cluster(self):
         if SILENCE_DRIVER_ON_SHUTDOWN:
             # driver logging is very verbose when nodes start going down -- bump up the level
@@ -297,6 +301,7 @@ class Tester(TestCase):
 
         if KEEP_TEST_DIR:
             self.cluster.stop(gently=RECORD_COVERAGE)
+            self._cleanup_last_test_dir()
         else:
             # when recording coverage the jvm has to exit normally
             # or the coverage information is not written by the jacoco agent
@@ -305,23 +310,24 @@ class Tester(TestCase):
                 self.cluster.stop(gently=True)
 
             # Cleanup everything:
-            self.stop_active_log_watch()
-            debug("removing ccm cluster " + self.cluster.name + " at: " + self.test_path)
-            self.cluster.remove()
+            try:
+                self.stop_active_log_watch()
+            finally:
+                debug("removing ccm cluster " + self.cluster.name + " at: " + self.test_path)
+                self.cluster.remove()
 
-            debug("clearing ssl stores from [{0}] directory".format(self.test_path))
-            for filename in ('keystore.jks', 'truststore.jks', 'ccm_node.cer'):
-                try:
-                    os.remove(os.path.join(self.test_path, filename))
-                except OSError as e:
-                    # once we port to py3, which has better reporting for exceptions raised while
-                    # handling other excpetions, we should just assert e.errno == errno.ENOENT
-                    if e.errno != errno.ENOENT:  # ENOENT = no such file or directory
-                        raise
+                debug("clearing ssl stores from [{0}] directory".format(self.test_path))
+                for filename in ('keystore.jks', 'truststore.jks', 'ccm_node.cer'):
+                    try:
+                        os.remove(os.path.join(self.test_path, filename))
+                    except OSError as e:
+                        # once we port to py3, which has better reporting for exceptions raised while
+                        # handling other excpetions, we should just assert e.errno == errno.ENOENT
+                        if e.errno != errno.ENOENT:  # ENOENT = no such file or directory
+                            raise
 
-            os.rmdir(self.test_path)
-        if os.path.exists(LAST_TEST_DIR):
-            os.remove(LAST_TEST_DIR)
+                os.rmdir(self.test_path)
+                self._cleanup_last_test_dir()
 
     def set_node_to_current_version(self, node):
         version = os.environ.get('CASSANDRA_VERSION')
