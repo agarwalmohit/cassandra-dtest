@@ -417,11 +417,13 @@ class Tester(TestCase):
         Calls into ccm to start actively watching logs.
 
         In the event that errors are seen in logs, ccm will call back to _log_error_handler.
+
+        When the cluster is no longer in use, stop_active_log_watch should be called to end log watching.
+        (otherwise a 'daemon' thread will (needlessly) run until the process exits).
         """
         # log watching happens in another thread, but we want it to halt the main
         # thread's execution, which we have to do by registering a signal handler
         signal.signal(signal.SIGINT, self._catch_interrupt)
-        # actively_watch_logs_for_error returns an event that needs to be .set() on exit to allow the thread to stop
         self._log_watch_thread = self.cluster.actively_watch_logs_for_error(self._log_error_handler, interval=0.25)
 
     def stop_active_log_watch(self):
