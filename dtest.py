@@ -431,16 +431,20 @@ class Tester(TestCase):
         Joins the log watching thread, which will then exit.
         Should be called after each test, ideally after nodes are stopped but before cluster files are removed.
 
-        Should not be called if begin_active_log_watch was never called to start log watching.
         Can be called multiple times without error.
-        If not called, threads will remain running until the parent process exits.
+        If not called, log watchin thread will remain running until the parent process exits.
+
+        Returns True if the log watching thread was stopped, otherwise False.
         """
         try:
-            self._log_watch_thread.join()
+            self._log_watch_thread
         except AttributeError:
             # no thread apparently, so nothing to stop
             # may happen when allow_log_errors is True, since in that case we don't init a logging thread
-            pass
+            return False
+        else:
+            self._log_watch_thread.join(timeout=60)
+            return True
 
     def _log_error_handler(self, errordata):
         """
